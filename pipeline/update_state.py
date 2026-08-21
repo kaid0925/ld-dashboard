@@ -26,12 +26,12 @@ def market_channel(g):
     for p,disp in [('옥션','옥션'),('G마켓','G마켓'),('11번가','11번가'),('스마트스토어','스마트스토어'),('공통엑셀양식','쿠팡FC/VF'),('쿠팡','쿠팡'),('롯데온','롯데온'),('알리익스프레스','알리익스프레스')]:
         if g.startswith(p): return disp
     return {'이지웰':'이지웰','삼성카드(복지)':'삼성카드VIP몰','오늘의집':'오늘의집','카카오선물하기':'카카오선물하기'}.get(g)
-SITE=[('제이슨딜','제이슨딜'),('플록(flock)-원룸만들기','원룸만들기'),('비버커뮤니케이션','비버커뮤니케이션'),('유니브','비누커머스'),('아트박스','아트박스'),('지그재그','지그재그'),('롯데하이마트','롯데하이마트'),('에스에스지닷컴','SSG'),('토스쇼핑','토스쇼핑'),('넛지헬스케어','넛지'),('무신사','무신사'),('에이블리','에이블리'),('GS SHOP','GS SHOP'),('LG전자(LG복지몰)','LG복지몰')]
+SITE=[('삼성카드(쇼핑)','삼성카드(쇼핑)'),('삼성카드(복지)','삼성카드VIP몰'),('제이슨딜','제이슨딜'),('플록(flock)-원룸만들기','원룸만들기'),('비버커뮤니케이션','비버커뮤니케이션'),('유니브','비누커머스'),('아트박스','아트박스'),('지그재그','지그재그'),('롯데하이마트','롯데하이마트'),('에스에스지닷컴','SSG'),('토스쇼핑','토스쇼핑'),('넛지헬스케어','넛지'),('무신사','무신사'),('에이블리','에이블리'),('GS SHOP','GS SHOP'),('LG전자(LG복지몰)','LG복지몰')]
 def site_channel(v):
     for k,disp in SITE:
         if k in v: return disp
     return None
-LUMP_MONTHS={'05','06','07'}
+LUMP_MONTHS=set()
 def pkey_of(datev):
     d=str(datev)[:10]; mo=d[5:7]; dd=d[8:10]
     if not (mo.isdigit() and dd.isdigit()): return None
@@ -52,6 +52,16 @@ model_by={m['key']:m for m in st['models']}
 
 # ===== NEW SALES =====
 sales_files=sorted(glob.glob(f'{DI}/매출이익리스트*.xlsx'))
+_sm=set()
+for _p in st['periods']:
+    _k=_p['k']; _sm.add(str(int(_k.split('-')[0])).zfill(2) if '-' in _k else str(int(_k)).zfill(2))
+for _f in sales_files:
+    _wb=openpyxl.load_workbook(_f,read_only=True,data_only=True); _ws=_wb[_wb.sheetnames[0]]
+    for _r in _ws.iter_rows(min_row=3,values_only=True):
+        _d=str(_r[0])[:10]
+        if len(_d)==10 and _d[:4]=='2026' and _d[5:7].isdigit(): _sm.add(_d[5:7])
+    _wb.close()
+LUMP_MONTHS={m for m in _sm if _sm and m<max(_sm)} if _sm else set()
 date_best={}
 for f in sales_files:
     m=re.search(r'~2026-(\d\d)-(\d\d)\)',f); end=(int(m.group(1)),int(m.group(2))) if m else (99,99)
@@ -139,6 +149,36 @@ for S in sorted(snap_seen):
         m['stock_s'][S]=sm.get(m['key'],[0,0])[0]
 
 # ===== finalize =====
+
+def collapse_completed(st):
+    from collections import defaultdict as _dd
+    grp=_dd(list)
+    for p in st['periods']:
+        k=p['k']
+        if '-' in k:
+            mo=str(int(k.split('-')[0])).zfill(2)
+            if mo in LUMP_MONTHS: grp[mo].append(k)
+    for mo,dks in grp.items():
+        lk=str(int(mo))
+        for c in st['channels']:
+            agg={b:[0,0,0] for b in ['AP','LDL','PMN','SS','SPL','ETC']}
+            for dk in dks:
+                cell=c['p'].get(dk,{})
+                for b in agg:
+                    v=cell.get(b,[0,0,0]); agg[b][0]+=v[0]; agg[b][1]+=v[1]; agg[b][2]+=v[2]
+                c['p'].pop(dk,None)
+            base=c['p'].get(lk,{b:[0,0,0] for b in agg})
+            for b in agg:
+                bb=base.get(b,[0,0,0]); agg[b][0]+=bb[0]; agg[b][1]+=bb[1]; agg[b][2]+=bb[2]
+            c['p'][lk]=agg
+        for m in st['models']:
+            t=0
+            for dk in dks: t+=m['p'].pop(dk,0)
+            m['p'][lk]=m['p'].get(lk,0)+t
+        st['periods']=[p for p in st['periods'] if p['k'] not in dks]
+        if not any(p['k']==lk for p in st['periods']):
+            st['periods'].append({'k':lk,'l':f'{int(mo)}월','t':'m'})
+collapse_completed(st)
 st['periods'].sort(key=lambda p:pk_sort(p['k']))
 st['snaps'].sort(key=lambda s:s['k'])
 st['latest_snap']=st['snaps'][-1]['k']

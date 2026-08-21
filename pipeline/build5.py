@@ -111,7 +111,7 @@ thead th.sortable.desc::after{content:" ▼";color:var(--blue);}
 <script>
 const D=__DATA__;
 const TRK=['AP','LDL','PMN','SS','SPL'];
-const AUG=D.day_keys;
+const DAYK=D.day_keys||[];
 const f=n=>Math.round(n).toLocaleString('ko-KR');
 const BC={AP:'#3b6ef8',LDL:'#0bbfa0',PMN:'#7c3aed',SS:'#f46b1b',SPL:'#ec4899',ETC:'#c0c7d4'};
 const BNAME={AP:'애니포트',LDL:'엘디엘마운트',PMN:'포미니',SS:'신성전기',SPL:'쏘플링',ETC:'기타'};
@@ -125,18 +125,20 @@ function esc(s){return(s||'').replace(/"/g,'&quot;');}
 function mkChart(id,type,data,opts){const c=document.getElementById(id);if(charts[id])charts[id].destroy();charts[id]=new Chart(c,{type,data,options:Object.assign({maintainAspectRatio:false,responsive:true},opts)});}
 // period helpers
 const ALLK=D.periods.map(p=>p.k);
-function expandKey(k){ if(k=='8')return AUG.slice(); if(k=='ALL')return ALLK.slice(); return [k]; }
+const LUMPMS=ALLK.filter(k=>k.indexOf('-')<0).sort((a,b)=>(+a)-(+b));
+const CURM=DAYK.length?String(+DAYK[0].split('-')[0]):null;
+function expandKey(k){ if(k=='ALL')return ALLK.slice(); if(ALLK.includes(k))return [k]; const dk=DAYK.filter(x=>String(+x.split('-')[0])==String(k)); return dk.length?dk:[k]; }
 function cval(ch,k,brand,metric){let s=0;expandKey(k).forEach(pk=>{s+=ch.p[pk][brand][IDX[metric]];});return s;}
 function mval(m,k){let s=0;expandKey(k).forEach(pk=>{s+=(m.p[pk]||0);});return s;}
 function colsFor(sel){
- if(sel=='month')return {cols:[{k:'5',l:'5월'},{k:'6',l:'6월'},{k:'7',l:'7월'},{k:'8',l:'8월'}]};
- if(sel=='augday')return {cols:AUG.map(dk=>({k:dk,l:'8/'+(+dk.split('-')[1])})).concat([{k:'8',l:'8월계'}])};
+ if(sel=='month'){const cols=LUMPMS.map(m=>({k:m,l:m+'월'}));if(CURM)cols.push({k:CURM,l:CURM+'월'});return {cols};}
+ if(sel=='curday'){const cols=DAYK.map(dk=>({k:dk,l:(+dk.split('-')[0])+'/'+(+dk.split('-')[1])}));if(CURM)cols.push({k:CURM,l:CURM+'월계'});return {cols};}
  if(sel=='all')return {cols:[{k:'ALL',l:'전체'}]};
- const lbl={'5':'5월','6':'6월','7':'7월','8':'8월누계'}[sel]||('8/'+(+String(sel).split('-')[1]));
+ let lbl;if(sel.indexOf('-')>=0)lbl=(+sel.split('-')[0])+'/'+(+sel.split('-')[1]);else if(ALLK.includes(sel))lbl=(+sel)+'월';else lbl=(+sel)+'월누계';
  return {cols:[{k:sel,l:lbl}]};
 }
-function scopeKeys(sel){ if(sel=='month'||sel=='all')return ALLK; if(sel=='augday'||sel=='8')return AUG; return [sel]; }
-function periodOptions(){let h='<option value="month">전체 (월별)</option><option value="augday">8월 (일별)</option><option value="all">전체 합계</option><option disabled>──</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월 누계</option>';AUG.forEach(dk=>h+=`<option value="${dk}">8/${+dk.split('-')[1]}</option>`);return h;}
+function scopeKeys(sel){ if(sel=='month'||sel=='all')return ALLK; if(sel=='curday')return DAYK; return expandKey(sel); }
+function periodOptions(){let h='<option value="month">전체 (월별)</option>';if(CURM)h+=`<option value="curday">${CURM}월 (일별)</option>`;h+='<option value="all">전체 합계</option><option disabled>──</option>';LUMPMS.forEach(m=>h+=`<option value="${m}">${m}월</option>`);if(CURM)h+=`<option value="${CURM}">${CURM}월 누계</option>`;DAYK.forEach(dk=>h+=`<option value="${dk}">${+dk.split('-')[0]}/${+dk.split('-')[1]}</option>`);return h;}
 function sumScope(sel,brand,metric){const ks=scopeKeys(sel);let s=0;D.channels.forEach(c=>ks.forEach(k=>s+=c.p[k][brand][IDX[metric]]));return s;}
 function daysLeftV(avg,stock){if(stock<=0)return 0;const dv=avg/30;return dv>0?Math.round(stock/dv*10)/10:9999;}
 function daysLeft(m){return daysLeftV(m.avg,m.stock);}
@@ -189,7 +191,7 @@ function chAll(){
  chTable();
 }
 function scopeAgg(sel){ // single aggregate key for charts
- if(sel=='month'||sel=='all')return 'ALL'; if(sel=='augday')return '8'; return sel;
+ if(sel=='month'||sel=='all')return 'ALL'; if(sel=='curday')return CURM; return sel;
 }
 function chTable(){
  const cf=colsFor(chSel).cols;
@@ -294,5 +296,5 @@ renderOv();renderCh();renderMd();renderInv();renderAdq();
 </script>
 </body></html>'''
 HTML=HTML.replace('__CSS__',css).replace('__CHARTJS__',chartjs).replace('__DATA__',data)
-open('2026.08_index.html','w',encoding='utf-8').write(HTML)
+open('dashboard.html','w',encoding='utf-8').write(HTML)
 print('written KB',round(len(HTML)/1024))
