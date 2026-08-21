@@ -62,7 +62,7 @@ for f in sales_files:
             if d not in date_best or end>date_best[d][0]: date_best[d]=(end,f)
     wb.close()
 ch_p=defaultdict(lambda:defaultdict(lambda:defaultdict(lambda:[0,0,0])))
-mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int)}); pkeys=set()
+mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int),'ch':{}}); pkeys=set()
 for f in sales_files:
     wb=openpyxl.load_workbook(f,read_only=True,data_only=True); ws=wb[wb.sheetnames[0]]
     for r in ws.iter_rows(min_row=3,values_only=True):
@@ -84,6 +84,7 @@ for f in sales_files:
         c=ch_p[ch][pk][b];c[0]+=qty;c[1]+=amt;c[2]+=prof
         if b in TRACK:
             key=b+'|'+(model_of(name) or clean(name)); e=mdl[key];e['p'][pk]+=qty
+            ce=e['ch'].setdefault(ch,[0,0]);ce[0]+=qty;ce[1]+=amt
             if not e['name']:e['name']=clean(name)
             if not e['cat']:e['cat']=(r[27] or '').strip()
     wb.close()
@@ -129,7 +130,8 @@ for key,e in mdl.items():
     if total<=0: continue
     avg=round(sum(p[k] for k in lump)/len(lump),1) if lump else 0
     stock_s={sk:smodel_by_snap[sk].get(key,[0,0])[0] for fn,sk,sl in snap_files}
-    models.append({'key':key,'brand':b,'model':key.split('|')[1] if re.match(r'(AP|SPL)',key.split('|')[1]) else '','name':e['name'],'cat':e['cat'],'p':p,'total':total,'avg':avg,'stock':stock_s[LATEST],'stock_s':stock_s})
+    stock_amt_s={sk:smodel_by_snap[sk].get(key,[0,0])[1] for fn,sk,sl in snap_files}
+    models.append({'key':key,'brand':b,'model':key.split('|')[1] if re.match(r'(AP|SPL)',key.split('|')[1]) else '','name':e['name'],'cat':e['cat'],'p':p,'total':total,'avg':avg,'stock':stock_s[LATEST],'stock_s':stock_s,'stock_amt':stock_amt_s[LATEST],'stock_amt_s':stock_amt_s,'ch':e['ch']})
 models.sort(key=lambda x:-x['total'])
 day_keys=[pk for pk in allk if '-' in pk]
 out={'periods':periods,'day_keys':day_keys,'channels':channels,'models':models,'snaps':snaps,'latest_snap':LATEST,'inv_by_snap':inv_by_snap,'bstock_by_snap':bstock_by_snap}

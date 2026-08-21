@@ -30,6 +30,7 @@ thead th.sortable.desc::after{content:" ▼";color:var(--blue);}
 <button class="tab-btn" onclick="switchTab('md',this)">📦 모델별 판매수량</button>
 <button class="tab-btn" onclick="switchTab('inv',this)">🏭 재고현황</button>
 <button class="tab-btn" onclick="switchTab('adq',this)">🎯 적정재고 분석</button>
+<button class="tab-btn" onclick="switchTab('dead',this)">🧊 악성재고</button>
 </div>
 
 <div id="tab-ov" class="tab-panel active"><div class="container">
@@ -107,6 +108,17 @@ thead th.sortable.desc::after{content:" ▼";color:var(--blue);}
 </div></div>
 </div></div>
 
+<div id="tab-dead" class="tab-panel"><div class="container">
+<div class="kpi-grid" id="dead-kpi"></div>
+<div class="card"><div class="card-header"><div class="card-title">악성 재고 (안 나가는데 쌓인 재고)</div><span class="cbadge cb-red" id="dead-cnt">0</span><span style="font-size:11px;color:var(--text3);">재고총액 큰 순 · 최신시점</span></div>
+<div class="card-body">
+<div style="font-size:11px;color:var(--text2);background:var(--bg3);padding:10px 13px;border-radius:8px;margin-bottom:12px;line-height:1.7;">재고는 있는데 판매가 느린 품목 = <b>자금이 묶인 재고</b>. 예상소진=현재고÷일평균(월평균÷30). 상태: <span class="pill p-red">안팔림</span> 최근3개월 판매0 · <span class="pill p-orange">심각</span> 180일↑ · <span class="pill p-yellow">과잉</span> 90일↑</div>
+<div class="filter-row" id="dead-filt"><button class="flt-btn active" data-v="90">과잉(90일↑)</button><button class="flt-btn" data-v="180">심각(180일↑)</button><button class="flt-btn" data-v="zero">안팔림(판매0)</button><button class="flt-btn" data-v="all">전체(재고>0)</button></div>
+<div class="filter-row" id="dead-brand"><button class="flt-btn active" data-v="ALL">전체</button><button class="flt-btn" data-v="AP">애니포트</button><button class="flt-btn" data-v="LDL">엘디엘마운트</button><button class="flt-btn" data-v="PMN">포미니</button><button class="flt-btn" data-v="SS">신성전기</button><button class="flt-btn" data-v="SPL">쏘플링</button></div>
+<input class="search-input" id="dead-search" placeholder="모델·상품명 검색...">
+<div class="tbl-wrap" style="max-height:600px;"><table id="dead-tbl"></table></div>
+</div></div>
+</div></div>
 <script>__CHARTJS__</script>
 <script>
 const D=__DATA__;
@@ -232,12 +244,20 @@ function mdTbl(){
  h+=`<th class="right sortable ${mdSort.c=='total'?(mdSort.d>0?'asc':'desc'):''}" data-c="total">합계</th>`;
  h+=`<th class="right sortable ${mdSort.c=='avg'?(mdSort.d>0?'asc':'desc'):''}" data-c="avg">월평균</th>`;
  h+=`<th class="right sortable ${mdSort.c=='stock'?(mdSort.d>0?'asc':'desc'):''}" data-c="stock">현재고</th></tr></thead><tbody>`;
- rows.forEach(m=>{h+=`<tr><td><span class="pill ${PILL[m.brand]}">${BNAME[m.brand]}</span></td><td class="mono">${m.model||'-'}</td><td style="max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.name)}">${m.name}</td><td style="color:var(--text3)">${m.cat||'-'}</td>`;
+ rows.forEach((m,i)=>{h+=`<tr class="mrow" data-idx="${i}" style="cursor:pointer"><td><span class="pill ${PILL[m.brand]}">${BNAME[m.brand]}</span></td><td class="mono">${m.model||'-'}</td><td style="max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.name)}">${m.name}</td><td style="color:var(--text3)">${m.cat||'-'}</td>`;
   cf.forEach(c=>h+=`<td class="right">${f(mval(m,c.k))}</td>`);
   h+=`<td class="right"><b>${f(m.total)}</b></td><td class="right" style="color:var(--blue)"><b>${m.avg.toLocaleString('ko-KR')}</b></td><td class="right ${m.stock<0?'neg':''}">${f(m.stock)}</td></tr>`;});
  h+='</tbody>';
  const t=document.getElementById('md-tbl');t.innerHTML=h;
  t.querySelectorAll('th.sortable').forEach(th=>th.onclick=()=>{const c=th.dataset.c;if(mdSort.c==c)mdSort.d*=-1;else{mdSort.c=c;mdSort.d=-1;}mdTbl();});
+ t.querySelectorAll('tr.mrow').forEach(tr=>tr.onclick=()=>{
+  const nx=tr.nextElementSibling; if(nx&&nx.classList.contains('mdet')){nx.remove();return;}
+  const m=rows[+tr.dataset.idx]; const ce=Object.entries(m.ch||{}).sort((a,b)=>b[1][0]-a[1][0]);
+  const inner=ce.length?ce.map(([c,v])=>`<span class="pill p-gray" style="margin:2px 3px;display:inline-block">${c} <b>${f(v[0])}</b></span>`).join(''):'<span style="color:var(--text3)">판매 채널 없음</span>';
+  const dr=document.createElement('tr');dr.className='mdet';
+  dr.innerHTML=`<td colspan="${tr.children.length}" style="background:var(--blue-l);padding:10px 14px"><b style="color:var(--blue)">📍 매출처(채널별 판매수량):</b> ${inner}</td>`;
+  tr.after(dr);
+ });
  document.getElementById('md-cnt').textContent=rows.length+'모델';
 }
 
@@ -292,7 +312,32 @@ function adqTbl(){
  document.getElementById('adq-cnt').textContent=rows.length+'품목';
 }
 
-renderOv();renderCh();renderMd();renderInv();renderAdq();
+
+let deadFilt='90',deadB='ALL',deadQ='';
+function deadDays(m){return m.avg<=0?Infinity:m.stock/(m.avg/30);}
+function renderDead(){seg('dead-filt',v=>{deadFilt=v;deadTbl();});seg('dead-brand',v=>{deadB=v;deadTbl();});document.getElementById('dead-search').oninput=e=>{deadQ=e.target.value.trim();deadTbl();};deadTbl();}
+function deadTbl(){
+ let rows=D.models.filter(m=>m.stock>0&&(deadB=='ALL'||m.brand==deadB)&&(deadQ==''||(m.name+m.model).toLowerCase().includes(deadQ.toLowerCase())));
+ if(deadFilt=='zero')rows=rows.filter(m=>m.avg<=0);
+ else if(deadFilt=='90')rows=rows.filter(m=>deadDays(m)>90);
+ else if(deadFilt=='180')rows=rows.filter(m=>deadDays(m)>180);
+ rows.sort((a,b)=>(b.stock_amt||0)-(a.stock_amt||0));
+ const base=D.models.filter(m=>m.stock>0);
+ const tied=rows.reduce((s,m)=>s+(m.stock_amt||0),0);
+ document.getElementById('dead-kpi').innerHTML=[
+  ['red','💰','묶인 재고총액',f(tied)+'원','현재 필터'],
+  ['red','🧊','안 팔림(재고有)',base.filter(m=>m.avg<=0).length+'건','최근3개월 판매0'],
+  ['orange','📦','과잉(90일↑)',base.filter(m=>deadDays(m)>90).length+'건',''],
+  ['orange','⏳','심각(180일↑)',base.filter(m=>deadDays(m)>180).length+'건','']
+ ].map(k=>`<div class="kpi"><div class="kpi-icon ${k[0]}">${k[1]}</div><div class="kpi-label">${k[2]}</div><div class="kpi-val ${k[0]}">${k[3]}</div><div class="kpi-sub">${k[4]}</div></div>`).join('');
+ let h='<thead><tr><th>브랜드</th><th>모델</th><th>상품명</th><th class="right">재고수량</th><th class="right">재고총액</th><th class="right">월평균</th><th class="right">예상소진</th><th>상태</th></tr></thead><tbody>';
+ rows.forEach(m=>{const dd=deadDays(m);const st=m.avg<=0?['안팔림','p-red']:dd>180?['심각','p-orange']:dd>90?['과잉','p-yellow']:['정상','p-green'];const dtxt=dd==Infinity?'∞':f(dd)+'일';
+   h+=`<tr><td><span class="pill ${PILL[m.brand]}">${BNAME[m.brand]}</span></td><td class="mono">${m.model||'-'}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.name)}">${m.name}</td><td class="right">${f(m.stock)}</td><td class="right"><b>${f(m.stock_amt||0)}</b></td><td class="right">${m.avg.toLocaleString('ko-KR')}</td><td class="right"><b>${dtxt}</b></td><td><span class="pill ${st[1]}">${st[0]}</span></td></tr>`;});
+ h+='</tbody>';
+ document.getElementById('dead-tbl').innerHTML=h;
+ document.getElementById('dead-cnt').textContent=rows.length+'품목';
+}
+renderOv();renderCh();renderMd();renderInv();renderAdq();renderDead();
 </script>
 </body></html>'''
 HTML=HTML.replace('__CSS__',css).replace('__CHARTJS__',chartjs).replace('__DATA__',data)

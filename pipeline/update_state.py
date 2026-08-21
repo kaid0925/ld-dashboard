@@ -72,7 +72,7 @@ for f in sales_files:
             if d not in date_best or end>date_best[d][0]: date_best[d]=(end,f)
     wb.close()
 new_ch=defaultdict(lambda:defaultdict(lambda:defaultdict(lambda:[0,0,0])))
-new_mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int)}); new_pks=set()
+new_mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int),'ch':{}}); new_pks=set()
 for f in sales_files:
     wb=openpyxl.load_workbook(f,read_only=True,data_only=True); ws=wb[wb.sheetnames[0]]
     for r in ws.iter_rows(min_row=3,values_only=True):
@@ -94,6 +94,7 @@ for f in sales_files:
         c=new_ch[ch][pk][b];c[0]+=qty;c[1]+=amt;c[2]+=prof
         if b in TRACK:
             key=b+'|'+(model_of(nm) or clean(nm)); e=new_mdl[key];e['p'][pk]+=qty
+            ce=e['ch'].setdefault(ch,[0,0]);ce[0]+=qty;ce[1]+=amt
             if not e['name']:e['name']=clean(nm)
             if not e['cat']:e['cat']=(r[27] or '').strip()
     wb.close()
@@ -107,10 +108,14 @@ for key,e in new_mdl.items():
     if key in model_by: continue
     mk=key.split('|')[1]
     nm={'key':key,'brand':key.split('|')[0],'model':(mk if re.match(r'(AP|SPL)',mk) else ''),'name':e['name'],'cat':e['cat'],
-        'p':{p['k']:0 for p in st['periods']},'total':0,'avg':0,'stock':0,'stock_s':{s['k']:0 for s in st['snaps']}}
+        'p':{p['k']:0 for p in st['periods']},'total':0,'avg':0,'stock':0,'stock_s':{s['k']:0 for s in st['snaps']},'stock_amt':0,'stock_amt_s':{s['k']:0 for s in st['snaps']},'ch':{}}
     st['models'].append(nm); model_by[key]=nm
 # fill model p for new pks
 for m in st['models']:
+    m.setdefault('ch',{})
+    nc=new_mdl.get(m['key'],{}).get('ch',{})
+    for ch,vv in nc.items():
+        cc=m['ch'].setdefault(ch,[0,0]); cc[0]+=vv[0]; cc[1]+=vv[1]
     for pk in new_pks:
         m['p'][pk]=new_mdl.get(m['key'],{'p':{}})['p'].get(pk,0) if m['key'] in new_mdl else m['p'].get(pk,0)
         if pk not in m['p']: m['p'][pk]=0
@@ -147,6 +152,7 @@ for S in sorted(snap_seen):
     st['bstock_by_snap'][S]=bs; st['inv_by_snap'][S]=items
     for m in st['models']:
         m['stock_s'][S]=sm.get(m['key'],[0,0])[0]
+        m.setdefault('stock_amt_s',{})[S]=sm.get(m['key'],[0,0])[1]
 
 # ===== finalize =====
 
@@ -188,6 +194,7 @@ for m in st['models']:
     m['total']=sum(m['p'].values())
     m['avg']=round(sum(m['p'].get(k,0) for k in lump)/len(lump),1) if lump else 0
     m['stock']=m['stock_s'].get(LATEST,0)
+    m['stock_amt']=m.get('stock_amt_s',{}).get(LATEST,0)
 st['models'].sort(key=lambda x:-x['total'])
 json.dump(st,open(STATE,'w',encoding='utf-8'),ensure_ascii=False)
 print('신규 기간:',sorted(new_pks,key=pk_sort),'| 신규 스냅샷:',[S for S in sorted(snap_seen) if S not in existing_snap])
