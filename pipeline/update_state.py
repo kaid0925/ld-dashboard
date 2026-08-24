@@ -4,7 +4,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 BASE=os.path.dirname(os.path.abspath(__file__))
 DI=os.path.join(BASE,'drive_in'); STATE=os.path.join(BASE,'dash_data.json')
 EXCLUDE=['엘마운트 부품','설치지원','박스']; TRACK=['AP','LDL','PMN','SS','SPL']
-IN_START='2026-08-05'  # 입고일 판단 시작일(이 날짜부터의 시점재고만 사용)
+IN_START='2026-09-01'  # 입고일 판단 시작일(이 날짜부터의 시점재고만 사용)
 BRANDS=['AP','LDL','PMN','SS','SPL','ETC']
 def brand(name):
     n=(name or ''); u=n.upper()
