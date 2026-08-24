@@ -4,7 +4,7 @@ import os
 BASE=os.path.dirname(os.path.abspath(__file__))
 DI=os.path.join(BASE,'drive_in')
 OUT=os.path.join(BASE,'dash_data.json')
-EXCLUDE=['엘마운트 부품','설치지원']
+EXCLUDE=['엘마운트 부품','설치지원','박스']
 def brand(name):
     n=(name or ''); u=n.upper()
     if any(x in n for x in EXCLUDE): return 'ETC'
@@ -137,11 +137,16 @@ for key,e in mdl.items():
         if p.get(pk,0)>0:
             mo,dd=pk.split('-'); dt=f'2026-{int(mo):02d}-{int(dd):02d}'
             if dt>last_sale: last_sale=dt
-    last_in=''; _prev=None
+    _sd={}
+    for pk in _dayks:
+        mo,dd=pk.split('-'); _sd[f'2026-{int(mo):02d}-{int(dd):02d}']=p.get(pk,0)
+    last_in=''; _prev=None; _prevk=None
     for fn,sk,sl in snap_files:
         cur=stock_s.get(sk,0)
-        if _prev is not None and cur>_prev: last_in=sk
-        _prev=cur
+        if _prev is not None:
+            _sold=sum(q for dt,q in _sd.items() if _prevk<dt<=sk)
+            if (cur-_prev+_sold)>0: last_in=sk
+        _prev=cur; _prevk=sk
     models.append({'key':key,'brand':b,'model':key.split('|')[1] if re.match(r'(AP|SPL)',key.split('|')[1]) else '','name':e['name'],'cat':e['cat'],'p':p,'total':total,'avg':avg,'stock':stock_s[LATEST],'stock_s':stock_s,'stock_amt':stock_amt_s[LATEST],'stock_amt_s':stock_amt_s,'last_sale':last_sale,'last_in':last_in,'ch':e['ch']})
 models.sort(key=lambda x:-x['total'])
 day_keys=[pk for pk in allk if '-' in pk]

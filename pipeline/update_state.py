@@ -3,7 +3,7 @@ from collections import defaultdict
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 BASE=os.path.dirname(os.path.abspath(__file__))
 DI=os.path.join(BASE,'drive_in'); STATE=os.path.join(BASE,'dash_data.json')
-EXCLUDE=['엘마운트 부품','설치지원']; TRACK=['AP','LDL','PMN','SS','SPL']
+EXCLUDE=['엘마운트 부품','설치지원','박스']; TRACK=['AP','LDL','PMN','SS','SPL']
 BRANDS=['AP','LDL','PMN','SS','SPL','ETC']
 def brand(name):
     n=(name or ''); u=n.upper()
@@ -210,11 +210,16 @@ for m in st['models']:
             dt=_pk2date(pk)
             if dt>ls: ls=dt
     m['last_sale']=ls
-    li=''; prev=None
+    sd={}
+    for pk in _dayks:
+        mo,dd=pk.split('-'); sd[f'2026-{int(mo):02d}-{int(dd):02d}']=m['p'].get(pk,0)
+    li=''; prev=None; prevk=None
     for S in _snapks:
         cur=m['stock_s'].get(S,0)
-        if prev is not None and cur>prev: li=S
-        prev=cur
+        if prev is not None:
+            sold=sum(q for dt,q in sd.items() if prevk<dt<=S)
+            if (cur-prev+sold)>0: li=S
+        prev=cur; prevk=S
     m['last_in']=li
 st['models'].sort(key=lambda x:-x['total'])
 json.dump(st,open(STATE,'w',encoding='utf-8'),ensure_ascii=False)
