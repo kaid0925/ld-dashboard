@@ -5,6 +5,7 @@ BASE=os.path.dirname(os.path.abspath(__file__))
 DI=os.path.join(BASE,'drive_in')
 OUT=os.path.join(BASE,'dash_data.json')
 EXCLUDE=['엘마운트 부품','설치지원','박스']
+IN_START='2026-08-05'
 def brand(name):
     n=(name or ''); u=n.upper()
     if any(x in n for x in EXCLUDE): return 'ETC'
@@ -142,6 +143,7 @@ for key,e in mdl.items():
         mo,dd=pk.split('-'); _sd[f'2026-{int(mo):02d}-{int(dd):02d}']=p.get(pk,0)
     last_in=''; _prev=None; _prevk=None
     for fn,sk,sl in snap_files:
+        if sk<IN_START: continue
         cur=stock_s.get(sk,0)
         if _prev is not None:
             _sold=sum(q for dt,q in _sd.items() if _prevk<dt<=sk)
