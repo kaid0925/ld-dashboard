@@ -72,7 +72,7 @@ for f in sales_files:
             if d not in date_best or end>date_best[d][0]: date_best[d]=(end,f)
     wb.close()
 new_ch=defaultdict(lambda:defaultdict(lambda:defaultdict(lambda:[0,0,0])))
-new_mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int),'ch':{}}); new_pks=set()
+new_mdl=defaultdict(lambda:{'name':'','cat':'','p':defaultdict(int),'ch':{}}); new_pks=set(); new_last_sale={}
 for f in sales_files:
     wb=openpyxl.load_workbook(f,read_only=True,data_only=True); ws=wb[wb.sheetnames[0]]
     for r in ws.iter_rows(min_row=3,values_only=True):
@@ -94,6 +94,7 @@ for f in sales_files:
         c=new_ch[ch][pk][b];c[0]+=qty;c[1]+=amt;c[2]+=prof
         if b in TRACK:
             key=b+'|'+(model_of(nm) or clean(nm)); e=new_mdl[key];e['p'][pk]+=qty
+            if qty>0 and d>new_last_sale.get(key,''): new_last_sale[key]=d
             ce=e['ch'].setdefault(ch,[0,0]);ce[0]+=qty;ce[1]+=amt
             if not e['name']:e['name']=clean(nm)
             if not e['cat']:e['cat']=(r[27] or '').strip()
@@ -195,6 +196,26 @@ for m in st['models']:
     m['avg']=round(sum(m['p'].get(k,0) for k in lump)/len(lump),1) if lump else 0
     m['stock']=m['stock_s'].get(LATEST,0)
     m['stock_amt']=m.get('stock_amt_s',{}).get(LATEST,0)
+# ===== date columns: 최종판매일 / 입고일 =====
+_snapks=[s['k'] for s in st['snaps']]
+_dayks=[p['k'] for p in st['periods'] if '-' in p['k']]
+def _pk2date(pk):
+    mo,dd=pk.split('-'); return f'2026-{int(mo):02d}-{int(dd):02d}'
+for m in st['models']:
+    ls=m.get('last_sale','') or ''
+    _n=new_last_sale.get(m['key'],'')
+    if _n and _n>ls: ls=_n
+    for pk in _dayks:
+        if m['p'].get(pk,0)>0:
+            dt=_pk2date(pk)
+            if dt>ls: ls=dt
+    m['last_sale']=ls
+    li=''; prev=None
+    for S in _snapks:
+        cur=m['stock_s'].get(S,0)
+        if prev is not None and cur>prev: li=S
+        prev=cur
+    m['last_in']=li
 st['models'].sort(key=lambda x:-x['total'])
 json.dump(st,open(STATE,'w',encoding='utf-8'),ensure_ascii=False)
 print('신규 기간:',sorted(new_pks,key=pk_sort),'| 신규 스냅샷:',[S for S in sorted(snap_seen) if S not in existing_snap])

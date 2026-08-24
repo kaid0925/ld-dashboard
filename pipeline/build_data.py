@@ -131,7 +131,18 @@ for key,e in mdl.items():
     avg=round(sum(p[k] for k in lump)/len(lump),1) if lump else 0
     stock_s={sk:smodel_by_snap[sk].get(key,[0,0])[0] for fn,sk,sl in snap_files}
     stock_amt_s={sk:smodel_by_snap[sk].get(key,[0,0])[1] for fn,sk,sl in snap_files}
-    models.append({'key':key,'brand':b,'model':key.split('|')[1] if re.match(r'(AP|SPL)',key.split('|')[1]) else '','name':e['name'],'cat':e['cat'],'p':p,'total':total,'avg':avg,'stock':stock_s[LATEST],'stock_s':stock_s,'stock_amt':stock_amt_s[LATEST],'stock_amt_s':stock_amt_s,'ch':e['ch']})
+    _dayks=[pk for pk in allk if '-' in pk]
+    last_sale=''
+    for pk in _dayks:
+        if p.get(pk,0)>0:
+            mo,dd=pk.split('-'); dt=f'2026-{int(mo):02d}-{int(dd):02d}'
+            if dt>last_sale: last_sale=dt
+    last_in=''; _prev=None
+    for fn,sk,sl in snap_files:
+        cur=stock_s.get(sk,0)
+        if _prev is not None and cur>_prev: last_in=sk
+        _prev=cur
+    models.append({'key':key,'brand':b,'model':key.split('|')[1] if re.match(r'(AP|SPL)',key.split('|')[1]) else '','name':e['name'],'cat':e['cat'],'p':p,'total':total,'avg':avg,'stock':stock_s[LATEST],'stock_s':stock_s,'stock_amt':stock_amt_s[LATEST],'stock_amt_s':stock_amt_s,'last_sale':last_sale,'last_in':last_in,'ch':e['ch']})
 models.sort(key=lambda x:-x['total'])
 day_keys=[pk for pk in allk if '-' in pk]
 out={'periods':periods,'day_keys':day_keys,'channels':channels,'models':models,'snaps':snaps,'latest_snap':LATEST,'inv_by_snap':inv_by_snap,'bstock_by_snap':bstock_by_snap}
