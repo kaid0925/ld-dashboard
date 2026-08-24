@@ -313,7 +313,10 @@ function adqTbl(){
 }
 
 
-let deadFilt='90',deadB='ALL',deadQ='';
+let deadFilt='90',deadB='ALL',deadQ='',deadSortK='stock_amt',deadSortD=-1;
+const DEAD_COLS=[['brand','브랜드',0],['model','모델',0],['name','상품명',0],['stock','재고수량',1],['stock_amt','재고총액',1],['avg','월평균',1],['days','예상소진',1],['status','상태',0]];
+function deadVal(m,k){if(k=='days'){var d=deadDays(m);return d==Infinity?1e15:d;}if(k=='status')return m.avg<=0?0:(deadDays(m)>180?1:deadDays(m)>90?2:3);if(k=='stock_amt')return m.stock_amt||0;return m[k];}
+function deadSetSort(k){if(deadSortK==k){deadSortD=-deadSortD;}else{deadSortK=k;deadSortD=(k=='brand'||k=='model'||k=='name')?1:-1;}deadTbl();}
 function deadDays(m){return m.avg<=0?Infinity:m.stock/(m.avg/30);}
 function renderDead(){seg('dead-filt',v=>{deadFilt=v;deadTbl();});seg('dead-brand',v=>{deadB=v;deadTbl();});document.getElementById('dead-search').oninput=e=>{deadQ=e.target.value.trim();deadTbl();};deadTbl();}
 function deadTbl(){
@@ -321,7 +324,7 @@ function deadTbl(){
  if(deadFilt=='zero')rows=rows.filter(m=>m.avg<=0);
  else if(deadFilt=='90')rows=rows.filter(m=>deadDays(m)>90);
  else if(deadFilt=='180')rows=rows.filter(m=>deadDays(m)>180);
- rows.sort((a,b)=>(b.stock_amt||0)-(a.stock_amt||0));
+ rows.sort((a,b)=>{var x=deadVal(a,deadSortK),y=deadVal(b,deadSortK);if(typeof x=='string')return x.localeCompare(y,'ko')*deadSortD;return (x-y)*deadSortD;});
  const base=D.models.filter(m=>m.stock>0);
  const tied=rows.reduce((s,m)=>s+(m.stock_amt||0),0);
  document.getElementById('dead-kpi').innerHTML=[
@@ -330,7 +333,7 @@ function deadTbl(){
   ['orange','📦','과잉(90일↑)',base.filter(m=>deadDays(m)>90).length+'건',''],
   ['orange','⏳','심각(180일↑)',base.filter(m=>deadDays(m)>180).length+'건','']
  ].map(k=>`<div class="kpi"><div class="kpi-icon ${k[0]}">${k[1]}</div><div class="kpi-label">${k[2]}</div><div class="kpi-val ${k[0]}">${k[3]}</div><div class="kpi-sub">${k[4]}</div></div>`).join('');
- let h='<thead><tr><th>브랜드</th><th>모델</th><th>상품명</th><th class="right">재고수량</th><th class="right">재고총액</th><th class="right">월평균</th><th class="right">예상소진</th><th>상태</th></tr></thead><tbody>';
+ let h='<thead><tr>'+DEAD_COLS.map(function(c){var ar=deadSortK==c[0]?(deadSortD<0?' ▼':' ▲'):'';return '<th class="'+(c[2]?'right ':'')+'" style="cursor:pointer;user-select:none" onclick="deadSetSort(\''+c[0]+'\')">'+c[1]+ar+'</th>';}).join('')+'</tr></thead><tbody>';
  rows.forEach(m=>{const dd=deadDays(m);const st=m.avg<=0?['안팔림','p-red']:dd>180?['심각','p-orange']:dd>90?['과잉','p-yellow']:['정상','p-green'];const dtxt=dd==Infinity?'∞':f(dd)+'일';
    h+=`<tr><td><span class="pill ${PILL[m.brand]}">${BNAME[m.brand]}</span></td><td class="mono">${m.model||'-'}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.name)}">${m.name}</td><td class="right">${f(m.stock)}</td><td class="right"><b>${f(m.stock_amt||0)}</b></td><td class="right">${m.avg.toLocaleString('ko-KR')}</td><td class="right"><b>${dtxt}</b></td><td><span class="pill ${st[1]}">${st[0]}</span></td></tr>`;});
  h+='</tbody>';
