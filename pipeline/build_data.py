@@ -4,7 +4,7 @@ import os
 BASE=os.path.dirname(os.path.abspath(__file__))
 DI=os.path.join(BASE,'drive_in')
 OUT=os.path.join(BASE,'dash_data.json')
-EXCLUDE=['엘마운트 부품','설치지원','박스']
+EXCLUDE=['엘마운트 부품','설치지원','박스','포장','봉투']
 IN_START='2026-09-01'
 def brand(name):
     n=(name or ''); u=n.upper()
